@@ -126,6 +126,7 @@ int main(void) {
 
   free(left);
   free(right);
+  free(both);
   snd_pcm_close(pcm);
   return 0;
 }
