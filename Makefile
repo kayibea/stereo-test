@@ -1,5 +1,5 @@
 CC = cc
-CFLAGS  = -std=c99  -Wall -Wextra -Werror -O2
+CFLAGS  = -std=c99 -pedantic -Wall -Wextra -Werror -O2
 LDFLAGS = -lasound -lm
 
 SRC = stereo-test.c

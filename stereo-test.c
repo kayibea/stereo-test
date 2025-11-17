@@ -1,9 +1,11 @@
 #define _GNU_SOURCE
+
 #include <alsa/asoundlib.h>
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,9 +24,10 @@ static void handle_signal(int sig, siginfo_t *info, void *ctx) {
   printf("\nCaught signal %d\n", sig);
 }
 
-static void generate_buffer(short *buf, int frames, int channel) {
+static void generate_buffer(int16_t *buf, int frames, int channel) {
   for (int i = 0; i < frames; i++) {
-    short sample = (short)(sin(2.0 * M_PI * FREQ * i / SAMPLE_RATE) * 30000);
+    int16_t sample =
+        (int16_t)(sin(2.0 * M_PI * FREQ * i / SAMPLE_RATE) * 30000);
     if (channel == 0) {
       buf[i * 2] = sample;
       buf[i * 2 + 1] = 0;
@@ -38,7 +41,7 @@ static void generate_buffer(short *buf, int frames, int channel) {
   }
 }
 
-static void play_buffer(snd_pcm_t *pcm, short *buf, int frames) {
+static void play_buffer(snd_pcm_t *pcm, int16_t *buf, int frames) {
   snd_pcm_prepare(pcm);
   snd_pcm_writei(pcm, buf, frames);
   snd_pcm_drain(pcm);
@@ -73,9 +76,9 @@ int main(void) {
   }
 
   int frames = SAMPLE_RATE * DURATION_SEC;
-  short *left = malloc(frames * 2 * sizeof(short));
-  short *right = malloc(frames * 2 * sizeof(short));
-  short *both = malloc(frames * 2 * sizeof(short));
+  int16_t *left = malloc(frames * 2 * sizeof(int16_t));
+  int16_t *right = malloc(frames * 2 * sizeof(int16_t));
+  int16_t *both = malloc(frames * 2 * sizeof(int16_t));
 
   if (!left || !right || !both) {
     fprintf(stderr, "Buffer alloc failed\n");
@@ -88,10 +91,10 @@ int main(void) {
   generate_buffer(right, frames, 1);
 
   printf("pid: %d\n", getpid());
-  printf("q/Q to quit\n");
-  printf("l/L for left channel\n");
-  printf("r/R for right channel\n");
-  printf("b/B for both channels\n");
+  printf("(q) to quit\n");
+  printf("(l) for left channel\n");
+  printf("(r) for right channel\n");
+  printf("(b) for both channels\n");
 
   while (running) {
     printf("> ");
