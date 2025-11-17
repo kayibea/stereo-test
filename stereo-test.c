@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#define CHANNELS 2
 #define FREQ 440.0
 #define DURATION_SEC 1
 #define SAMPLE_RATE 48000
@@ -28,22 +29,30 @@ static void generate_buffer(int16_t *buf, int frames, int channel) {
   for (int i = 0; i < frames; i++) {
     int16_t sample =
         (int16_t)(sin(2.0 * M_PI * FREQ * i / SAMPLE_RATE) * 30000);
-    if (channel == 0) {
-      buf[i * 2] = sample;
-      buf[i * 2 + 1] = 0;
-    } else if (channel == 1) {
-      buf[i * 2] = 0;
-      buf[i * 2 + 1] = sample;
-    } else {
-      buf[i * 2] = sample;
-      buf[i * 2 + 1] = sample;
+
+    switch (channel) {
+    case 0:
+      buf[i * CHANNELS] = sample;
+      buf[i * CHANNELS + 1] = 0;
+      break;
+    case 1:
+      buf[i * CHANNELS] = 0;
+      buf[i * CHANNELS + 1] = sample;
+      break;
+    default:
+      buf[i * CHANNELS] = sample;
+      buf[i * CHANNELS + 1] = sample;
     }
   }
 }
 
 static void play_buffer(snd_pcm_t *pcm, int16_t *buf, int frames) {
   snd_pcm_prepare(pcm);
-  snd_pcm_writei(pcm, buf, frames);
+  int ret = snd_pcm_writei(pcm, buf, frames);
+  if (ret < 0) {
+    fprintf(stderr, "PCM write error: %s\n", snd_strerror(ret));
+    snd_pcm_prepare(pcm);
+  }
   snd_pcm_drain(pcm);
 }
 
@@ -68,7 +77,7 @@ int main(void) {
   snd_pcm_hw_params_set_access(pcm, params, SND_PCM_ACCESS_RW_INTERLEAVED);
   snd_pcm_hw_params_set_format(pcm, params, SND_PCM_FORMAT_S16_LE);
   snd_pcm_hw_params_set_rate(pcm, params, SAMPLE_RATE, 0);
-  snd_pcm_hw_params_set_channels(pcm, params, 2);
+  snd_pcm_hw_params_set_channels(pcm, params, CHANNELS);
 
   if (snd_pcm_hw_params(pcm, params) < 0) {
     fprintf(stderr, "Failed to set HW params\n");
@@ -76,17 +85,21 @@ int main(void) {
   }
 
   int frames = SAMPLE_RATE * DURATION_SEC;
-  int16_t *left = malloc(frames * 2 * sizeof(int16_t));
-  int16_t *right = malloc(frames * 2 * sizeof(int16_t));
-  int16_t *both = malloc(frames * 2 * sizeof(int16_t));
+  int16_t *left = malloc(frames * CHANNELS * sizeof(int16_t));
+  int16_t *right = malloc(frames * CHANNELS * sizeof(int16_t));
+  int16_t *dual = malloc(frames * CHANNELS * sizeof(int16_t));
 
-  if (!left || !right || !both) {
+  if (!left || !right || !dual) {
     fprintf(stderr, "Buffer alloc failed\n");
     fprintf(stderr, "%s (%d)\n", strerror(errno), errno);
+    snd_pcm_close(pcm);
+    free(left);
+    free(right);
+    free(dual);
     return 1;
   }
 
-  generate_buffer(both, frames, 2);
+  generate_buffer(dual, frames, 2);
   generate_buffer(left, frames, 0);
   generate_buffer(right, frames, 1);
 
@@ -94,7 +107,7 @@ int main(void) {
   printf("(q) to quit\n");
   printf("(l) for left channel\n");
   printf("(r) for right channel\n");
-  printf("(b) for both channels\n");
+  printf("(d) for both channels\n");
 
   while (running) {
     printf("> ");
@@ -105,20 +118,26 @@ int main(void) {
       break;
     if (isspace(c))
       continue;
+
     c = tolower(c);
 
-    if (c == 'q') {
+    switch (c) {
+    case 'q':
       running = 0;
-    } else if (c == 'l') {
+      break;
+    case 'l':
       printf("Left\n");
       play_buffer(pcm, left, frames);
-    } else if (c == 'r') {
+      break;
+    case 'r':
       printf("Right\n");
       play_buffer(pcm, right, frames);
-    } else if (c == 'b') {
-      printf("Both\n");
-      play_buffer(pcm, both, frames);
-    } else {
+      break;
+    case 'd':
+      printf("Dual\n");
+      play_buffer(pcm, dual, frames);
+      break;
+    default:
       printf("Invalid command: '%c'\n", c);
     }
 
@@ -127,9 +146,9 @@ int main(void) {
       ;
   }
 
+  snd_pcm_close(pcm);
   free(left);
   free(right);
-  free(both);
-  snd_pcm_close(pcm);
+  free(dual);
   return 0;
 }
