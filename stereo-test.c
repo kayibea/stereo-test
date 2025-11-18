@@ -85,29 +85,26 @@ int main(void) {
   }
 
   int frames = SAMPLE_RATE * DURATION_SEC;
-  int16_t *left = malloc(frames * CHANNELS * sizeof(int16_t));
-  int16_t *right = malloc(frames * CHANNELS * sizeof(int16_t));
-  int16_t *dual = malloc(frames * CHANNELS * sizeof(int16_t));
+  int16_t *buffer = malloc(frames * CHANNELS * 3 * sizeof(int16_t));
 
-  if (!left || !right || !dual) {
+  if (!buffer) {
     fprintf(stderr, "Buffer alloc failed\n");
     fprintf(stderr, "%s (%d)\n", strerror(errno), errno);
     snd_pcm_close(pcm);
-    free(left);
-    free(right);
-    free(dual);
     return 1;
   }
+
+  int16_t *left = buffer;
+  int16_t *right = buffer + frames * CHANNELS;
+  int16_t *dual = buffer + 2 * frames * CHANNELS;
 
   generate_buffer(dual, frames, 2);
   generate_buffer(left, frames, 0);
   generate_buffer(right, frames, 1);
 
-  printf("pid: %d\n", getpid());
-  printf("(q) to quit\n");
-  printf("(l) for left channel\n");
-  printf("(r) for right channel\n");
-  printf("(d) for both channels\n");
+  printf("pid: %d\n(q) to quit\n(l) for left channel\n(r) for right "
+         "channel\n(d) for both channels\n",
+         getpid());
 
   while (running) {
     printf("> ");
@@ -147,8 +144,6 @@ int main(void) {
   }
 
   snd_pcm_close(pcm);
-  free(left);
-  free(right);
-  free(dual);
+  free(buffer);
   return 0;
 }
