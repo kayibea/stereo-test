@@ -25,35 +25,40 @@ static void handle_signal(int sig, siginfo_t *info, void *ctx) {
   printf("\nCaught signal %d\n", sig);
 }
 
-static void generate_buffer(int16_t *buf, int frames, int channel) {
-  for (int i = 0; i < frames; i++) {
-    int16_t sample =
-        (int16_t)(sin(2.0 * M_PI * FREQ * i / SAMPLE_RATE) * 30000);
+static inline int16_t get_sample(int index) {
+  return (int16_t)(sin(2.0 * M_PI * FREQ * index / SAMPLE_RATE) * 30000);
+}
 
-    switch (channel) {
-    case 0:
+static void generate_buffer(int16_t *buf, int frames, int channel) {
+  if (channel == 0) {
+    for (int i = 0; i < frames; i++) {
+      int16_t sample = get_sample(i);
       buf[i * CHANNELS] = sample;
       buf[i * CHANNELS + 1] = 0;
-      break;
-    case 1:
+    }
+    return;
+  }
+
+  if (channel == 1) {
+    for (int i = 0; i < frames; i++) {
+      int16_t sample = get_sample(i);
       buf[i * CHANNELS] = 0;
       buf[i * CHANNELS + 1] = sample;
-      break;
-    default:
-      buf[i * CHANNELS] = sample;
-      buf[i * CHANNELS + 1] = sample;
     }
+    return;
+  }
+
+  for (int i = 0; i < frames; i++) {
+    int16_t sample = get_sample(i);
+    buf[i * CHANNELS] = sample;
+    buf[i * CHANNELS + 1] = sample;
   }
 }
 
 static void play_buffer(snd_pcm_t *pcm, int16_t *buf, int frames) {
-  snd_pcm_prepare(pcm);
-  int ret = snd_pcm_writei(pcm, buf, frames);
-  if (ret < 0) {
-    fprintf(stderr, "PCM write error: %s\n", snd_strerror(ret));
-    snd_pcm_prepare(pcm);
-  }
+  snd_pcm_writei(pcm, buf, frames);
   snd_pcm_drain(pcm);
+  snd_pcm_prepare(pcm);
 }
 
 int main(void) {
@@ -86,7 +91,6 @@ int main(void) {
 
   int frames = SAMPLE_RATE * DURATION_SEC;
   int16_t *buffer = malloc(frames * CHANNELS * 3 * sizeof(int16_t));
-
   if (!buffer) {
     fprintf(stderr, "Buffer alloc failed\n");
     fprintf(stderr, "%s (%d)\n", strerror(errno), errno);
@@ -102,45 +106,43 @@ int main(void) {
   generate_buffer(left, frames, 0);
   generate_buffer(right, frames, 1);
 
-  printf("pid: %d\n(q) to quit\n(l) for left channel\n(r) for right "
-         "channel\n(d) for both channels\n",
-         getpid());
+  printf(
+      "pid: %d\n(q) to quit\n(l) for left channel\n(r) for right "
+      "channel\n(d) for both channels\n",
+      getpid());
 
   while (running) {
     printf("> ");
     fflush(stdout);
 
     int c = getchar();
-    if (c == EOF)
-      break;
-    if (isspace(c))
-      continue;
+    if (c == EOF) break;
+    if (isspace(c)) continue;
 
     c = tolower(c);
 
     switch (c) {
-    case 'q':
-      running = 0;
-      break;
-    case 'l':
-      printf("Left\n");
-      play_buffer(pcm, left, frames);
-      break;
-    case 'r':
-      printf("Right\n");
-      play_buffer(pcm, right, frames);
-      break;
-    case 'd':
-      printf("Dual\n");
-      play_buffer(pcm, dual, frames);
-      break;
-    default:
-      printf("Invalid command: '%c'\n", c);
+      case 'q':
+        running = 0;
+        break;
+      case 'l':
+        printf("Left\n");
+        play_buffer(pcm, left, frames);
+        break;
+      case 'r':
+        printf("Right\n");
+        play_buffer(pcm, right, frames);
+        break;
+      case 'd':
+        printf("Dual\n");
+        play_buffer(pcm, dual, frames);
+        break;
+      default:
+        printf("Invalid command: '%c'\n", c);
     }
 
     int junk;
-    while ((junk = getchar()) != '\n' && junk != EOF)
-      ;
+    while ((junk = getchar()) != '\n' && junk != EOF);
   }
 
   snd_pcm_close(pcm);
