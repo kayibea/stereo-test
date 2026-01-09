@@ -2,8 +2,8 @@ CC = cc
 CFLAGS  = -std=c99 -pedantic -Wall -Wextra -Werror -O2
 LDFLAGS = -lasound -lm
 
-SRC = stereo-test.c
 BIN = stereo-test
+SRC = main.c
 
 PREFIX ?= /usr/local
 BINDIR = $(PREFIX)/bin
